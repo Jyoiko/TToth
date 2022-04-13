@@ -4,7 +4,7 @@ import torch
 import numpy as np
 import SimpleITK as sitk
 from utils import common
-
+from skimage import transform
 
 class Test():
     @staticmethod
@@ -81,19 +81,25 @@ def crop(img, seg):
     z = np.any(seg_array, axis=(1, 2))
     print(z.shape)
     startposition1, endposition1 = np.where(z)[0][[0, -1]]
-    # print(startposition,endposition)
+    startposition1=max(0,startposition1-1)
+    endposition1=min(endposition1+1,z.shape[0])
+    print(startposition1,endposition1)
     # ct_array=ct_array[startposition-2:endposition+2]
     print(z[startposition1], z[endposition1])
 
     z = np.any(seg_array, axis=(0, 2))
     print(z.shape)
     startposition2, endposition2 = np.where(z)[0][[0, -1]]
+    startposition2 = max(0, startposition2 - 1)
+    endposition2 = min(endposition2 + 1, z.shape[0])
     # print(startposition,endposition)
     # ct_array=ct_array[:][startposition-2:endposition+2]
 
     z = np.any(seg_array, axis=(0, 1))
     print(z.shape)
     startposition3, endposition3 = np.where(z)[0][[0, -1]]
+    startposition3 = max(0, startposition3 - 1)
+    endposition3 = min(endposition3 + 1, z.shape[0])
     # print(startposition3,endposition3)
     # ct_array=ct_array[:][:][startposition-2:endposition+2]
     # print(ct_array.shape)
@@ -108,9 +114,9 @@ def crop(img, seg):
 
 
 if __name__ == '__main__':
-    img_path = "data/imagesTr/tooth_023.nii.gz"
+    img_path = "data/imagesTs/tooth_022.nii.gz"
     # device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-    seg_path = "data/labelsTr/tooth_023.nii.gz"
+    seg_path = "data/labelsTs/tooth_022.nii.gz"
     n_labels = 33
     # result_save_path = "output/crop"
     # if not os.path.exists(result_save_path):
@@ -118,19 +124,29 @@ if __name__ == '__main__':
     #
     img = sitk.ReadImage(img_path)
     seg = sitk.ReadImage(seg_path)
+    print(seg.GetSpacing())
+    print(img.GetSpacing())
+    ct_array = sitk.GetArrayFromImage(img)
+    seg_array = sitk.GetArrayFromImage(seg)
+    ct_array=transform.resize(ct_array,(256,256,256))
+    seg_array = transform.resize(seg_array, (256, 256, 256))
+    img = sitk.GetImageFromArray(ct_array)
+    seg = sitk.GetImageFromArray(seg_array)
+
     # img, seg = crop(img, seg)
     # sitk.WriteImage(seg, os.path.join(result_save_path, "seg_tooth_036.nii.gz"))
     # sitk.WriteImage(img, os.path.join(result_save_path, "img_tooth_036.nii.gz"))
-    seg = Test.resize_image_itk(seg, (192, 192, 192))
-    seg=sitk.GetArrayFromImage(seg)
-    seg=torch.from_numpy(seg)#.to(device)
-    seg=common.to_one_hot_3d(seg.unsqueeze(0).long(), n_classes=n_labels)
-    seg = torch.argmax(seg.squeeze(0), dim=0)
-    print(seg.shape)
-    img=Test.resize_image_itk(img,(192,192,192),resamplemethod=sitk.sitkLinear)
+    # seg = Test.resize_image_itk(seg, (192, 192, 192))
+    # seg=sitk.GetArrayFromImage(seg)
+    # seg=torch.from_numpy(seg)#.to(device)
+    # seg=common.to_one_hot_3d(seg.unsqueeze(0).long(), n_classes=n_labels)
+    # seg = torch.argmax(seg.squeeze(0), dim=0)
 
-    seg = np.asarray(seg.detach().cpu().numpy(), dtype='uint8')
-    seg = sitk.GetImageFromArray(seg)
-    print(seg.GetSize())
-    sitk.WriteImage(seg,"output/test/seg_tooth_023.nii.gz")
-    sitk.WriteImage(img, "output/test/img_tooth_023.nii.gz")
+    # img=Test.resize_image_itk(img,(192,192,192),resamplemethod=sitk.sitkLinear)
+
+    # seg = np.asarray(seg.detach().cpu().numpy(), dtype='uint8')
+    # seg = sitk.GetImageFromArray(seg)
+    print(seg.GetSpacing())
+    print(img.GetSpacing())
+    sitk.WriteImage(seg,"output/test/seg_tooth_022.nii.gz")
+    sitk.WriteImage(img, "output/test/img_tooth_022.nii.gz")

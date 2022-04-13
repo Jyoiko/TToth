@@ -1,15 +1,16 @@
 import SimpleITK as sitk
 import numpy as np
 
+
 def dice_coeff(pred, target):
     smooth = 1.
     num = pred.size(1)
     m1 = pred.view(num, -1)  # Flatten
     m2 = target.view(num, -1)  # Flatten
     intersection = (m1 * m2)
-    sum_intersection=intersection.sum(1)
-    sum1=m1.sum(1)
-    sum2=m2.sum(1)
+    sum_intersection = intersection.sum(1)
+    sum1 = m1.sum(1)
+    sum2 = m2.sum(1)
     res = (2. * sum_intersection + smooth) / (sum1 + sum2 + smooth)
 
     return res
@@ -36,6 +37,8 @@ def crop(img, seg):
     z = np.any(seg_array, axis=(1, 2))
     # print(z.shape)
     startposition1, endposition1 = np.where(z)[0][[0, -1]]
+    startposition1 = max(0, startposition1 - 1)
+    endposition1 = min(endposition1 + 1, z.shape[0])
     # print(startposition,endposition)
     # ct_array=ct_array[startposition-2:endposition+2]
     # print(ct_array.shape)
@@ -43,12 +46,16 @@ def crop(img, seg):
     z = np.any(seg_array, axis=(0, 2))
     # print(z.shape)
     startposition2, endposition2 = np.where(z)[0][[0, -1]]
+    startposition2 = max(0, startposition2 - 1)
+    endposition2 = min(endposition2 + 1, z.shape[0])
     # print(startposition,endposition)
     # ct_array=ct_array[:][startposition-2:endposition+2]
 
     z = np.any(seg_array, axis=(0, 1))
     # print(z.shape)
     startposition3, endposition3 = np.where(z)[0][[0, -1]]
+    startposition3 = max(0, startposition3 - 1)
+    endposition3 = min(endposition3 + 1, z.shape[0])
     # print(startposition3,endposition3)
     # ct_array=ct_array[:][:][startposition-2:endposition+2]
     # print(ct_array.shape)
@@ -60,6 +67,7 @@ def crop(img, seg):
     img = sitk.GetImageFromArray(ct_array)
     seg = sitk.GetImageFromArray(seg_array)
     return img, seg
+
 
 def resize_image_itk(itkimage, newSize, resamplemethod=sitk.sitkNearestNeighbor):
     resampler = sitk.ResampleImageFilter()

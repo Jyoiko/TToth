@@ -50,11 +50,11 @@ def _make_nConv(nchan, depth, elu):
 
 
 class InputTransition(nn.Module):
-    def __init__(self, outChans, elu):
+    def __init__(self, out_channels, elu):
         super(InputTransition, self).__init__()
-        self.conv1 = nn.Conv3d(1, 16, kernel_size=5, padding=2)
-        self.bn1 = ContBatchNorm3d(16)
-        self.relu1 = ELUCons(elu, 16)
+        self.conv1 = nn.Conv3d(1, out_channels, kernel_size=5, padding=2)
+        self.bn1 = ContBatchNorm3d(out_channels)
+        self.relu1 = ELUCons(elu, out_channels)
 
     def forward(self, x):
         # do we want a PRELU here as well?
@@ -137,9 +137,9 @@ class OutputTransition(nn.Module):
         # out1 = self.relu2(self.bn2(self.conv3(x)))
         # out1 = self.conv4(out1)
         # make channels the last axis
-        out = out.permute(0, 2, 3, 4, 1).contiguous()
-        # flatten
-        out = out.view(out.numel() // 2, 2)
+        # out = out.permute(0, 2, 3, 4, 1).contiguous()
+        # # flatten
+        # out = out.view(out.numel() // 2, 2)
         # #
         out = self.softmax(out, dim=1)
         # treat channel 0 as the predicted output
@@ -157,7 +157,7 @@ class VNet(nn.Module):
         self.down_tr64 = DownTransition(32, 2, elu)
         self.down_tr128 = DownTransition(64, 3, elu, dropout=True)
         self.down_tr256 = DownTransition(128, 2, elu, dropout=True)
-        self.up_tr256 = UpTransition(256, 256, 2, elu, dropout=True)#vnet深度降低
+        self.up_tr256 = UpTransition(256, 256, 2, elu, dropout=True)  # vnet深度降低
         self.up_tr128 = UpTransition(256, 128, 2, elu, dropout=True)
         # self.up_tr128 = UpTransition(128, 128, 2, elu, dropout=True)
 

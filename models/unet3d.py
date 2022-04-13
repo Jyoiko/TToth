@@ -81,7 +81,7 @@ class ConvU(nn.Module):
 
 
 class Unet(nn.Module):
-    def __init__(self, c=1, n=32, dropout=0.5, norm='gn', num_classes=2):
+    def __init__(self, c=1, n=16, dropout=0.5, norm='gn', num_classes=2):
         super(Unet, self).__init__()
         self.upsample = nn.Upsample(scale_factor=2,
                                     mode='trilinear', align_corners=False)
