@@ -17,7 +17,6 @@ def normalization(planes, norm='gn'):
         raise ValueError('normalization type {} is not supported'.format(norm))
     return m
 
-
 class ConvBlock(nn.Module):
     def __init__(self, in_channel, out_channel, kernel=3, padding=1, norm='bn'):
         super().__init__()
@@ -28,28 +27,48 @@ class ConvBlock(nn.Module):
         x = self.bn1(self.conv(x))
         return x
 
+class DilaConvBlock(nn.Module):
+    def __init__(self, channel, kernel=3,  norm='bn'):
+        super().__init__()
+        # self.conv = nn.Conv3d(in_channel, out_channel, kernel, 1, padding, bias=False)
+        self.conv1 = nn.Conv3d(channel, channel, kernel_size=kernel, padding=1)
+        self.conv_spatial = nn.Conv3d(channel, channel, kernel_size=kernel, padding=2, dilation=2)
+        self.conv2 = nn.Conv3d(channel, channel, kernel_size=1)
+        self.bn1 = normalization(channel, norm)
+        self.relu = nn.ReLU(inplace=True)
+
+    def forward(self, x):
+        u = x.clone()
+        attn = self.conv1(x)
+        attn = self.conv_spatial(attn)
+        attn = self.conv2(attn)
+        out=self.relu(self.bn1(u*attn))
+        return out
+
+
 
 class ConvD(nn.Module):
     def __init__(self, inplanes, planes, dropout=0.0, first=False):
         super(ConvD, self).__init__()
 
         self.first = first
-        self.maxpool = nn.MaxPool3d(2, 2)
+        self.maxpool = nn.Conv3d(inplanes, planes, kernel_size=2, stride=2)
 
         self.dropout = dropout
         self.relu = nn.ReLU(inplace=True)
 
         self.conv1 = ConvBlock(inplanes, planes, 3)
 
-        self.conv2 = ConvBlock(planes, planes, 3)
+        self.conv2 = DilaConvBlock(planes, 3)
 
         self.conv3 = ConvBlock(planes, planes, 3)
 
     def forward(self, x):
         if not self.first:
             x = self.maxpool(x)
-        x = self.conv1(x)
-        y = self.relu(self.conv2(x))
+        else:
+            x = self.conv1(x)
+        y = self.conv2(x)
         if self.dropout > 0:
             y = F.dropout3d(y, self.dropout)
         y = self.conv3(x)
@@ -57,7 +76,7 @@ class ConvD(nn.Module):
 
 
 class ConvU(nn.Module):
-    def __init__(self, planes, first=False):
+    def __init__(self, planes,first=False):
         super(ConvU, self).__init__()
 
         self.first = first
@@ -69,29 +88,30 @@ class ConvU(nn.Module):
 
         self.conv3 = ConvBlock(planes, planes, 3, 1)
 
-        self.relu = nn.ReLU(inplace=True)
+        self.relu1 = nn.ReLU(inplace=True)
+        self.relu2 = nn.ReLU(inplace=True)
 
     def forward(self, x, prev):
         # final output is the localization layer
         if not self.first:
-            x = self.relu(self.conv1(x))
+            x = self.relu1(self.conv1(x))
 
         y = F.upsample(x, scale_factor=2, mode='trilinear', align_corners=False)
-        y = self.relu(self.conv2(y))
+        y = self.relu2(self.conv2(y))
 
         y = torch.cat([prev, y], 1)
-        y = self.relu(self.conv3(y))
+        y = self.conv3(y)
 
         return y
 
 
-class Unet(nn.Module):
+class DUnet(nn.Module):
     def __init__(self, c=1, n=16, dropout=0.5, norm='gn', num_classes=2):
-        super(Unet, self).__init__()
+        super(DUnet, self).__init__()
         self.upsample = nn.Upsample(scale_factor=2,
                                     mode='trilinear', align_corners=False)
 
-        self.convd1 = ConvD(c, n, dropout, first=True)
+        self.convd1 = ConvD(c, n, dropout,  first=True)
         self.convd2 = ConvD(n, 2 * n, dropout, )
         self.convd3 = ConvD(2 * n, 4 * n, dropout)
         self.convd4 = ConvD(4 * n, 8 * n, dropout)
@@ -131,7 +151,6 @@ class Unet(nn.Module):
 
         return y1
 
-
 # import torch
 # import os
 # os.environ['CUDA_VISIBLE_DEVICES'] = '0'
@@ -141,8 +160,3 @@ class Unet(nn.Module):
 # model.cuda()
 # y = model(x)
 # print(y.shape)
-if __name__ == '__main__':
-    model = Unet()
-    name=str(model)
-    index=name.index('(')
-    print(name[:name.index('(')])

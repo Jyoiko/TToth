@@ -25,8 +25,8 @@ class Train_Dataset(dataset):
 
         ct_array = sitk.GetArrayFromImage(ct)
         seg_array = sitk.GetArrayFromImage(seg)
-        ct_array = resize(ct_array, (256, 256, 256))
-        seg_array = resize(seg_array, (256, 256, 256))# (256,256,256)
+        ct_array = resize(ct_array, (256,256,256))
+        seg_array = resize(seg_array, (256,256,256))# (256,256,256) (192,192,192)
         ct_array = (ct_array - np.min(ct_array)) / (np.max(ct_array) - np.min(ct_array))
         seg_array[seg_array != 0] = 1
         ct_array = torch.FloatTensor(ct_array).unsqueeze(0)

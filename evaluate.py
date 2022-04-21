@@ -1,4 +1,5 @@
 from models.vnet4dout import VNet
+from models.vnet_dilation import DVNet
 import torch
 import torch.backends.cudnn as cudnn
 import numpy as np
@@ -8,12 +9,14 @@ from datasets.dataset_lits_train import Test_Dataset
 from torch.utils.data import DataLoader
 from utils.utils import dice_coeff
 from models.unet3d import Unet
+from models.unet3d_dilated import DUnet
 import SimpleITK as sitk
 import nibabel as nib
 from utils import common
+from models.DMFNet_16x import DMFNet
 
 
-def test_for_hku(model, device):
+def test_for_hku(model, device, n_labels):
     test_path = "data/crop_resize_test"
     testset = TestDataset(test_path)
     testloader = DataLoader(testset, batch_size=1)
@@ -34,7 +37,7 @@ def test_for_hku(model, device):
         sitk.WriteImage(pred, os.path.join(save_path, "result-" + index[0] + ".nii.gz"))
 
 
-def test_for_mine(model, device):
+def test_for_mine(model, device, n_labels):
     result_save_path = "output/test"
     if not os.path.exists(result_save_path):
         os.mkdir(result_save_path)
@@ -48,7 +51,7 @@ def test_for_mine(model, device):
     img, seg = img.to(device), seg.long()
 
     _img = np.asarray(img.detach().cpu().numpy(), dtype='uint8')
-    _img = _img.squeeze(axis=(0,1))
+    _img = _img.squeeze(axis=(0, 1))
     _img = sitk.GetImageFromArray(_img)
     path = os.path.join(result_save_path, 'result-img-' + index[0])
     sitk.WriteImage(_img, path)
@@ -65,7 +68,7 @@ def test_for_mine(model, device):
     # seg = torch.argmax(seg, dim=1)
     pred = np.asarray(pred.detach().cpu().numpy(), dtype='uint8')
 
-    pred = pred.squeeze(0)#pred.reshape((192, 192, 192)) 会导致图像变形，原因不明
+    pred = pred.squeeze(0)  # pred.reshape((192, 192, 192)) 会导致图像变形，原因不明
 
     # pred = sitk.GetImageFromArray(np.squeeze(pred, axis=0))
     pred = sitk.GetImageFromArray(pred)
@@ -75,15 +78,16 @@ def test_for_mine(model, device):
 
 if __name__ == '__main__':
     cudnn.benchmark = True
-    os.environ["CUDA_VISIBLE_DEVICES"] = "2"
+    os.environ["CUDA_VISIBLE_DEVICES"] = "3"
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-    # model = VNet(elu=False, nll=False).to(device=device)
-    model = Unet().to(device)
+    model = DVNet(elu=False, nll=False).to(device=device)
+    # model=DMFNet(c=1, num_classes=2).to(device)
+    # model = DUnet().to(device)
     n_labels = 2  # 33
     # model = Unet(num_classes=n_labels).to(device)
-    checkpoint = torch.load("output/<module 'time' (built-in)>_epoch_19.pth", map_location='cpu')
+    checkpoint = torch.load("output/VNet_2022-04-19_15:53:22_epoch_9.pth", map_location='cpu')
     model.load_state_dict(checkpoint)
-    test_for_mine(model, device)
+    test_for_mine(model, device, n_labels)
 
 # img = nib.load('output/test/img_tooth_023.nii.gz').get_data()
 # seg=nib.load('data/labelsTr/tooth_023.nii.gz').get_data()
