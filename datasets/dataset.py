@@ -2,10 +2,9 @@ import os
 import numpy as np
 import torch
 from torch.utils.data import Dataset
-import nibabel as nib
 from torch.utils.data import DataLoader
 import SimpleITK as sitk
-from utils.utils import resize_image_itk, crop
+
 
 
 class TrainDataset(Dataset):  # 可以在dataset中进行crop,resize操作,也可以提前处理图片后传入dataset
@@ -44,24 +43,9 @@ class TrainDataset(Dataset):  # 可以在dataset中进行crop,resize操作,也�
     def __getitem__(self, index: int):
         ct_array = sitk.ReadImage(self.vol_path[index])
         seg_array = sitk.ReadImage(self.seg_path[index])
-        # ct_array, seg_array = crop(ct_array, seg_array)
-        # img = resize_image_itk(ct_array, (192, 192, 192), resamplemethod=sitk.sitkLinear)
         img = sitk.GetArrayFromImage(ct_array)
-        # img = (img - np.min(img)) / (np.max(img) - np.min(img))
-        # seg_array = resize_image_itk(seg_array, (192, 192, 192))
         seg_array = sitk.GetArrayFromImage(seg_array)
         img = torch.unsqueeze(torch.from_numpy(img).type(torch.FloatTensor), dim=0)
-        # seg_array = seg_array.flatten().reshape(-1, 1)
-        # seg = np.insert(seg_array, 1, values=0, axis=1)
-        #
-        # for i in range(seg.shape[0]):
-        #     if seg[i][0] == 0:
-        #         seg[i][0] = 1
-        #         seg[i][1] = 0
-        #     else:
-        #         seg[i][0] = 0
-        #         seg[i][1] = 1
-
         seg_array[seg_array != 0] = 1
         seg = torch.from_numpy(seg_array).type(torch.FloatTensor)
 
@@ -105,9 +89,6 @@ class TestDataset(Dataset):
     def __getitem__(self, index: int):
         ct = sitk.ReadImage(self.vol_path[index], sitk.sitkInt16)
         seg = sitk.ReadImage(self.seg_path[index], sitk.sitkUInt8)
-        # ct, seg = crop(ct, seg)
-        # ct = resize_image_itk(ct, (192, 192, 192), resamplemethod=sitk.sitkLinear)
-        # seg = resize_image_itk(seg, (192, 192, 192))
         ct_array = sitk.GetArrayFromImage(ct)
         seg_array = sitk.GetArrayFromImage(seg)
         seg_array[seg_array != 0] = 1

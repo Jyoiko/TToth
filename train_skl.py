@@ -5,16 +5,9 @@ from torch import nn
 import torch.optim as optim
 import torch.backends.cudnn as cudnn
 from torch.utils.data.dataloader import DataLoader
-from datasets.dataset_cen_train import Train_Dataset
-from datasets.dataset import TrainDataset
-from models.vnet4dout import VNet
+from datasets.dataset_ske_train import Train_Dataset
 from models.vnet_cui import VNet_cui
-from models.vnet_dilation import DVNet
 from utils.utils import dice_coeff
-from models.UNet import UNet
-from models.unet3d import Unet
-from models.unet3d_dilated import DUnet
-from models.DMFNet_16x import DMFNet
 from utils import common
 from evaluate import test_for_mine
 import sys
@@ -27,23 +20,21 @@ if __name__ == '__main__':
     local_time = time.localtime()
     type_time = time.strftime('%Y-%m-%d_%H:%M:%S', local_time)
 
-    os.environ["CUDA_VISIBLE_DEVICES"] = "4"
+    os.environ["CUDA_VISIBLE_DEVICES"] = "2"
     cudnn.benchmark = True
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     torch.manual_seed(123)
     lr = 1e-4
     epochs = 1000
-    # model = VNet(elu=False, nll=False).to(device)
     n_labels = 2  # 33
     model = VNet_cui(n_channels=1, n_classes=2, normalization='batchnorm', has_dropout=True).to(device)
-    # model = DMFNet(c=1, num_classes=2).to(device)
-    # model = Unet().to(device)
+
     model_name = str(model)
     model_name = model_name[:model_name.index('(')]
-    sys.stdout = Print_Logger(filename=f'cen_off-{model_name}-{type_time}-log.log')
+    sys.stdout = Print_Logger(filename=f'ske_off-{model_name}-{type_time}-log.log')
     criterion1 = nn.CrossEntropyLoss().to(device)
     criterion2 = nn.SmoothL1Loss().to(device)
-    # loss = loss.DiceLoss().to(device)
+
     optim = optim.Adam(model.parameters(), lr=lr)
     model, optim = amp.initialize(model, optim, opt_level="O1")
 
@@ -53,22 +44,18 @@ if __name__ == '__main__':
 
     print("Start Training...")
     for epoch in range(epochs):
+        # common.adjust_learning_rate(optim, epoch, lr)
         model.train()
 
-        for step, (_, vol, seg, cen_map) in enumerate(train_loader):
-            # vol, seg, cen_map = vol.float(), seg.long(), cen_map.long()
-            # seg = common.to_one_hot_3d(seg, n_classes=n_labels)
+        for step, (_, vol, seg, ske_map) in enumerate(train_loader):
             vol = vol.to(device)
             seg = seg.to(device)
-            cen_map = cen_map.to(device)
-            # seg = seg.view(-1, 2)
-            # cen = cen.to(device)
-
+            ske_map = ske_map.to(device)
             optim.zero_grad()
             pred, pred_off = model(vol)
             pred = F.softmax(pred, dim=1)
             loss1 = criterion1(pred, seg)
-            loss2 = criterion2(pred_off, cen_map)
+            loss2 = criterion2(pred_off, ske_map)
             pred_img = torch.argmax(pred.detach().cpu(), dim=1)
             pred_img = common.to_one_hot_3d(pred_img, n_classes=n_labels)
             seg = common.to_one_hot_3d(seg.cpu(), n_classes=n_labels)
@@ -78,7 +65,7 @@ if __name__ == '__main__':
             # loss_value.backward()
             optim.step()
             print(
-                "Epoch :{} ,Step :{}, LR: {}, BCE Loss:{:.3f}, cen_SmoothL1Loss:{:.3f},loss :{:.3f} ,dice:{}".format(
+                "Epoch :{} ,Step :{}, LR: {}, BCE Loss:{:.3f}, ske_SmoothL1Loss:{:.3f},loss :{:.3f} ,dice:{}".format(
                     epoch, step, lr,
                     loss1.item(),
                     loss2.item(),
@@ -92,4 +79,4 @@ if __name__ == '__main__':
         if (epoch + 1) % 100 == 0:
             torch.save(model.state_dict(),
                        os.path.join('output',
-                                    'cen_off_{}_{}_epoch_{}.pth'.format(model_name, type_time, epoch)))  # 打印模型名称
+                                    'ske_off_{}_{}_epoch_{}.pth'.format(model_name, type_time, epoch)))  # 打印模型名称

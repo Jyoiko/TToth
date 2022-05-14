@@ -63,7 +63,7 @@ print(ct_array.shape)
 #     resized_ct[i] = cv2.resize(ct_array[i], (256, 256), interpolation=cv2.INTER_NEAREST)
 #     resized_seg[i] = cv2.resize(seg_array[i], (256, 256), interpolation=cv2.INTER_NEAREST)
 # for i in range(ct_array.shape[1]):
-#     resized_ct[:, i, :] = cv2.resize(ct_array[:, i, :], (256, 256),interpolation=cv2.INTER_NEAREST)
+#     resized_ct[:, i, :] = cv2.resize(ct_array[:, i, :], (256, 256),interpolation=cv2.INTER_LINEAR)
 #     resized_seg[:, i, :] = cv2.resize(seg_array[:, i, :], (256, 256),interpolation=cv2.INTER_NEAREST)
 # for i in range(ct_array.shape[2]):
 #     resized_ct[:, :, i] = cv2.resize(ct_array[:, :, i], (256, 256),interpolation=cv2.INTER_NEAREST)

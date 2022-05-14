@@ -6,7 +6,7 @@ import torch
 
 # adapt from https://github.com/MIC-DKFZ/BraTS2017
 
-def normalization(planes, norm='gn'):
+def normalization(planes, norm='bn'):
     if norm == 'bn':
         m = nn.BatchNorm3d(planes)
     elif norm == 'gn':
@@ -17,6 +17,18 @@ def normalization(planes, norm='gn'):
         raise ValueError('normalization type {} is not supported'.format(norm))
     return m
 
+class ContBatchNorm3d(nn.modules.batchnorm._BatchNorm):
+    def _check_input_dim(self, input):
+        if input.dim() != 5:
+            raise ValueError('expected 5D input (got {}D input)'
+                             .format(input.dim()))
+        super(ContBatchNorm3d, self)._check_input_dim(input)
+
+    def forward(self, input):
+        # self._check_input_dim(input)
+        return F.batch_norm(
+            input, self.running_mean, self.running_var, self.weight, self.bias,
+            True, self.momentum, self.eps)
 
 class ConvBlock(nn.Module):
     def __init__(self, in_channel, out_channel, kernel=3, padding=1, norm='bn'):
