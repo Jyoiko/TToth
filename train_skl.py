@@ -6,10 +6,10 @@ import torch.optim as optim
 import torch.backends.cudnn as cudnn
 from torch.utils.data.dataloader import DataLoader
 from datasets.dataset_ske_train import Train_Dataset
-from models.vnet_cui import VNet_cui
+from models.vnet_res import VNet_res
 from utils.utils import dice_coeff
 from utils import common
-from evaluate import test_for_mine
+from evaluate import for_mine
 import sys
 from utils.logger import Print_Logger
 import torch.nn.functional as F
@@ -27,7 +27,7 @@ if __name__ == '__main__':
     lr = 1e-4
     epochs = 1000
     n_labels = 2  # 33
-    model = VNet_cui(n_channels=1, n_classes=2, normalization='batchnorm', has_dropout=True).to(device)
+    model = VNet_res(n_channels=1, n_classes=2, normalization='batchnorm', has_dropout=True).to(device)
 
     model_name = str(model)
     model_name = model_name[:model_name.index('(')]
@@ -53,7 +53,7 @@ if __name__ == '__main__':
             ske_map = ske_map.to(device)
             optim.zero_grad()
             pred, pred_off = model(vol)
-            pred = F.softmax(pred, dim=1)
+            # pred = F.softmax(pred, dim=1)
             loss1 = criterion1(pred, seg)
             loss2 = criterion2(pred_off, ske_map)
             pred_img = torch.argmax(pred.detach().cpu(), dim=1)
@@ -74,7 +74,7 @@ if __name__ == '__main__':
                         pred_img,
                         seg).numpy()))
         print('=' * 12 + "Test" + '=' * 12)
-        test_for_mine(model, device, n_labels)
+        for_mine(model, device, n_labels)
         print('=' * 26)
         if (epoch + 1) % 100 == 0:
             torch.save(model.state_dict(),

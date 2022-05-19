@@ -30,8 +30,8 @@ def cen_cluster(seg, off):
     # generate the voting map based on the binary segmentation and offset
     voting_map = np.zeros(seg.shape)
     coord = np.array(np.nonzero((seg == 1)))
-    num_fg = coord.shape[1]
-    coord = coord + off[:, seg == 1]
+    _off = off[:, seg == 1]
+    coord = coord + _off
     coord = coord.astype(np.int)
     coord, coord_count = np.unique(coord, return_counts=True, axis=1)
     np.clip(coord[0], 0, voting_map.shape[0] - 1, out=coord[0])

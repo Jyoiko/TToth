@@ -9,11 +9,12 @@ from datasets.dataset_patch_train import Train_Dataset
 from models.vnet_ins_seg import VNet_singleTooth
 from utils.utils import dice_coeff_all
 from utils import common
-from evaluate import test_for_mine_patches
+from evaluate import for_mine_patches
 import sys
 from utils.logger import Print_Logger
 import torch.nn.functional as F
 from apex import amp
+from utils.loss import dice_loss
 
 if __name__ == '__main__':
     start = time.time()
@@ -39,7 +40,7 @@ if __name__ == '__main__':
 
     print("=" * 20)
     trainset = Train_Dataset()
-    train_loader = DataLoader(trainset, batch_size=1, num_workers=8, shuffle=False)
+    train_loader = DataLoader(trainset, batch_size=1, num_workers=4, shuffle=False)
 
     print("Start Training...")
     for epoch in range(epochs):
@@ -62,8 +63,12 @@ if __name__ == '__main__':
             seg_patch = torch.cat((seg_patch1, seg_patch2), 0)
             pred = torch.cat((seg_patch, seg_patch3), 0)
             # pred = model(vol, ske_map)
-            pred = F.softmax(pred, dim=1)
-            loss_value = criterion1(pred, seg)
+            # pred = F.softmax(pred, dim=1)
+            loss_seg = F.cross_entropy(pred, seg)
+            outputs_soft = F.softmax(pred, dim=1)
+            loss_seg_dice = dice_loss(outputs_soft[:, 1, :, :, :], seg == 1)
+            loss_value = 0.5 * (loss_seg + loss_seg_dice)
+            # loss_value = criterion1(pred, seg)
             pred_img = torch.argmax(pred.detach().cpu(), dim=1)
             # pred_img = common.to_one_hot_3d(pred_img, n_classes=n_labels)
 
@@ -79,7 +84,7 @@ if __name__ == '__main__':
                         pred_img,
                         seg.cpu()).numpy()))
         # print('=' * 12 + "Test" + '=' * 12)
-        # test_for_mine_patches(model, device, n_labels)
+        # for_mine_patches(model, device, n_labels)
         print('=' * 26)
         if (epoch + 1) % 100 == 0:
             torch.save(model.state_dict(),

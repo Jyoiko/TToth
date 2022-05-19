@@ -15,6 +15,7 @@ class Train_Dataset(dataset):
     """
 
     def __init__(self, datapath="data"):
+        super(Train_Dataset, self).__init__()
         self.datapath = datapath
         self.vol_path = []
         self.seg_path = []
@@ -60,6 +61,7 @@ class TestDataset(dataset):
     """
 
     def __init__(self, datapath="data"):
+        super(TestDataset, self).__init__()
         self.datapath = datapath
         self.vol_path = []
         self.seg_path = []

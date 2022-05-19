@@ -17,7 +17,7 @@ class ConvBlock(nn.Module):
             else:
                 input_channel = n_filters_out
 
-            ops.append(nn.Conv3d(input_channel, n_filters_out, 3, padding=1))
+            ops.append(nn.Conv3d(input_channel, n_filters_out, 5, padding=2))
             if normalization == 'batchnorm':
                 ops.append(nn.BatchNorm3d(n_filters_out, track_running_stats=False))
             elif normalization == 'groupnorm':
@@ -177,9 +177,9 @@ class Upsampling(nn.Module):
         return x
 
 
-class VNet_cui(nn.Module):
+class VNet_res(nn.Module):
     def __init__(self, n_channels=3, n_classes=2, n_filters=16, normalization='none', has_dropout=False):
-        super(VNet_cui, self).__init__()
+        super(VNet_res, self).__init__()
         self.has_dropout = has_dropout
 
         self.block_one = ConvBlock(1, n_channels, 8, normalization=normalization)
@@ -188,19 +188,19 @@ class VNet_cui(nn.Module):
         self.block_two = ConvBlock(2, n_filters, n_filters * 2, normalization=normalization)
         self.block_two_dw = DownsamplingConvBlock(n_filters * 2, n_filters * 4, normalization=normalization)
 
-        self.block_three = ConvBlock(3, n_filters * 4, n_filters * 4, normalization=normalization)
+        self.block_three = ResidualConvBlock(3, n_filters * 4, n_filters * 4, normalization=normalization)
         self.block_three_dw = DownsamplingConvBlock(n_filters * 4, n_filters * 8, normalization=normalization)
 
-        self.block_four = ConvBlock(3, n_filters * 8, n_filters * 8, normalization=normalization)
+        self.block_four = ResidualConvBlock(3, n_filters * 8, n_filters * 8, normalization=normalization)
         self.block_four_dw = DownsamplingConvBlock(n_filters * 8, n_filters * 16, normalization=normalization)
 
-        self.block_five = ConvBlock(3, n_filters * 16, n_filters * 16, normalization=normalization)
+        self.block_five = ResidualConvBlock(3, n_filters * 16, n_filters * 16, normalization=normalization)
         self.block_five_up = UpsamplingDeconvBlock(n_filters * 16, n_filters * 8, normalization=normalization)
 
-        self.block_six = ConvBlock(3, n_filters * 8, n_filters * 8, normalization=normalization)
+        self.block_six = ResidualConvBlock(3, n_filters * 8, n_filters * 8, normalization=normalization)
         self.block_six_up = UpsamplingDeconvBlock(n_filters * 8, n_filters * 4, normalization=normalization)
 
-        self.block_seven = ConvBlock(3, n_filters * 4, n_filters * 4, normalization=normalization)
+        self.block_seven = ResidualConvBlock(3, n_filters * 4, n_filters * 4, normalization=normalization)
         self.block_seven_up = UpsamplingDeconvBlock(n_filters * 4, n_filters * 2, normalization=normalization)
 
         self.block_eight = ConvBlock(2, n_filters * 2, n_filters, normalization=normalization)

@@ -10,6 +10,7 @@ from utils.morphology_tooth import process_outlier, resize_to256, get_skeleton_o
 
 class Train_Dataset(dataset):
     def __init__(self, datapath="data"):
+        super(Train_Dataset, self).__init__()
         # self.filename_list = load_file_name_list(os.path.join(dataset_path, 'train_path_list.txt'))
         self.datapath = datapath
         self.vol_path = []
