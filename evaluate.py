@@ -1,3 +1,4 @@
+from models.attention_unet import AttentionUNet
 from models.vnet4dout import VNet
 from models.vnet_dilation import DVNet
 import torch
@@ -6,7 +7,7 @@ import torch.backends.cudnn as cudnn
 import numpy as np
 import os
 from datasets.dataset import TestDataset, TrainDataset
-from datasets.dataset_cen_train import Test_Dataset
+from datasets.dataset_cen_train import Test_Dataset, Test_Attn_Dataset
 # from datasets.dataset_patch_train import TestDataset
 from torch.utils.data import DataLoader
 from utils.utils import dice_coeff, dice_coeff_all
@@ -14,7 +15,7 @@ from utils.utils import dice_coeff, dice_coeff_all
 import SimpleITK as sitk
 from utils import common
 from models.vnet_cui import VNet_cui
-from utils.morphology_tooth import cen_cluster, map_cntToskl
+from utils.morphology_tooth import cen_cluster, map_cntToskl, centroid_density
 from utils.utils import get_patch
 from skimage import measure
 from models.vnet_ins_seg import VNet_singleTooth
@@ -50,7 +51,7 @@ def for_mine_ins(cnt_net, ske_net, ins_net, device1, device2, device3):
 
         # test bc
         seg = common.to_one_hot_3d(seg, n_classes=n_labels)
-        seg_pred = seg_skl.cpu()
+        seg_pred = (seg_cnt.cpu() + seg_skl.cpu()) / 2
         seg_pred = torch.argmax(seg_pred, dim=1)
         _seg = common.to_one_hot_3d(seg_pred, n_classes=n_labels)
         print(dice_coeff(_seg, seg))
@@ -59,11 +60,14 @@ def for_mine_ins(cnt_net, ske_net, ins_net, device1, device2, device3):
         cen_off = cen_off.detach().cpu().data.numpy().squeeze(0)
         skl_off = skl_off.detach().cpu().data.numpy().squeeze(0)
         centroids = cen_cluster(seg_pred, cen_off)
+        print(centroids)
         cen_array = np.zeros(img_ins.shape, dtype=int)
         cen_array[centroids[0], centroids[1], centroids[2]] = 1
+
+        # cen_array = centroid_density(seg_pred,cen_off)
+
         cen_array = dilation(cen_array, np.ones((3, 3, 3)))
         cen_array = cen_array.astype(np.int16)
-        # np.save("cen.npy",cen_array)
         cen_array = sitk.GetImageFromArray(cen_array)
         path = os.path.join(result_save_path, "cen" + index[0])
         sitk.WriteImage(cen_array, path)
@@ -112,7 +116,7 @@ def for_mine_ins(cnt_net, ske_net, ins_net, device1, device2, device3):
                 continue
             count = count + 1
             image_label[coord[0], coord[1], coord[2]] = count
-            # image_vote_flag[coord[0], coord[1], coord[2]] = 0
+            image_vote_flag[coord[0], coord[1], coord[2]] = 0
         """
         result: image_label
         """
@@ -179,7 +183,7 @@ def for_mine(model, device, n_labels):
     # if not os.path.exists(result_save_path):
     #     os.mkdir(result_save_path)
     datapath = "data"
-    testset = Test_Dataset(datapath=datapath)
+    testset = Test_Attn_Dataset(datapath=datapath)
     testloader = DataLoader(testset, batch_size=1)
     model.eval()
     # loader = iter(testloader)
@@ -191,12 +195,12 @@ def for_mine(model, device, n_labels):
         seg = common.to_one_hot_3d(seg, n_classes=n_labels)
         # seg=seg.to(device)
         # seg = seg.view(-1, 2)
-        pred, _ = model(img)
+        pred= model(img)
         temp = pred.detach().cpu()
 
         pred = torch.argmax(temp, dim=1)
         pred_img = common.to_one_hot_3d(pred, n_classes=n_labels)
-        print("dice: ", dice_coeff(pred_img, seg))
+        print("dice: ", np.around(dice_coeff(pred_img, seg), 4))
     # seg = torch.argmax(seg, dim=1)
     # pred = np.asarray(pred.detach().cpu().numpy(), dtype='uint8')
 
@@ -208,88 +212,70 @@ def for_mine(model, device, n_labels):
     # sitk.WriteImage(pred, path)
 
 
-def centroid_offset_mine(model, device, n_labels):
-    result_save_path = "output/test"
-    criterion2 = nn.SmoothL1Loss().to(device)
-    if not os.path.exists(result_save_path):
-        os.mkdir(result_save_path)
-    datapath = "data"
-    testset = Test_Dataset(datapath=datapath)
+def for_mine_attn(model, device, n_labels, datapath="data"):
+    testset = Test_Attn_Dataset(datapath=datapath)
     testloader = DataLoader(testset, batch_size=1)
     model.eval()
-    loader = iter(testloader)
-    index, img, _, cen = next(loader)
-    _img = np.asarray(img.detach().cpu().numpy())
-    _img = _img.squeeze(axis=(0, 1))
-    _img = sitk.GetImageFromArray(_img)
-    path = os.path.join(result_save_path, 'result-img-' + index[0])
-    sitk.WriteImage(_img, path)
-    _cen = np.asarray(cen.detach().cpu().numpy())
-    _cen = _cen.squeeze(axis=0)
-    _cen = sitk.GetImageFromArray(_cen[0])
-    path = os.path.join(result_save_path, 'cenx-' + index[0])
-    sitk.WriteImage(_cen, path)
-    # for step, (index, img, _, cen) in enumerate(testloader):
-    #     if step > 5:
-    #         break
-    img = img.to(device)
-    cen = cen.to(device)
-    pred = model(img)
-    loss = criterion2(pred, cen)
-    print(loss.item())
-    pred = np.asarray(pred.detach().cpu().numpy())
+    result_save_path = "output/test/test_result"
+    for step, (index, img, seg) in enumerate(testloader):
+        if step > 5:
+            break
+        img, seg = img.to(device), seg.long()
+        seg = common.to_one_hot_3d(seg, n_classes=n_labels)
 
-    pred = pred.squeeze(0)
-    cenx = sitk.GetImageFromArray(pred[0])
-    ceny = sitk.GetImageFromArray(pred[1])
-    cenz = sitk.GetImageFromArray(pred[2])
-    pathx = os.path.join(result_save_path, 'result-cenx-' + index[0])
-    sitk.WriteImage(cenx, pathx)
+        pred = model(img)
+        temp = pred.detach().cpu()
+
+        pred = torch.argmax(temp, dim=1)
+        pred_img = common.to_one_hot_3d(pred, n_classes=n_labels)
+        print("dice: ", np.around(dice_coeff(pred_img, seg), 4))
+
+        # pred = pred.numpy().astype(np.uint8).squeeze(0)
+        # pred = sitk.GetImageFromArray(pred)
+        # path = os.path.join(result_save_path, 'attn-' + index[0])
+        # sitk.WriteImage(pred, path)
+
+
+def centroid_offset_mine(model, device, n_labels):
+    datapath = "../data"
+    testset = Test_Dataset(datapath=datapath)
+    testloader = DataLoader(testset, batch_size=1)
+    # criterion = nn.SmoothL1Loss().to(device)
+    model.eval()
+    for step, (index, img, seg) in enumerate(testloader):
+        if step > 5:
+            break
+        img, seg = img.to(device), seg.long()
+        # cen_map = cen_map.to(device)
+        seg = common.to_one_hot_3d(seg, n_classes=n_labels)
+        pred, pred_off = model(img)
+        temp = pred.detach().cpu()
+        # loss = criterion(pred_off, cen_map)
+        pred = torch.argmax(temp, dim=1)
+        pred_img = common.to_one_hot_3d(pred, n_classes=n_labels)
+        print(f"dice:{dice_coeff(pred_img, seg)}  ")
 
 
 if __name__ == '__main__':
     cudnn.benchmark = True
+    n_labels=2
     os.environ["CUDA_VISIBLE_DEVICES"] = "1,2,3"
     device1 = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     device2 = torch.device('cuda:1' if torch.cuda.is_available() else 'cpu')
     device3 = torch.device('cuda:2' if torch.cuda.is_available() else 'cpu')
-    cen_net = VNet_cui(n_channels=1, n_classes=2, normalization='batchnorm', has_dropout=True).to(device1)
+    cen_net = VNet_res(n_channels=1, n_classes=2, normalization='batchnorm', has_dropout=True).to(device1)
     ske_net = VNet_res(n_channels=1, n_classes=2, normalization='batchnorm', has_dropout=True).to(device2)
     ins_net = VNet_singleTooth(n_channels=2, n_classes=2, normalization='batchnorm', has_dropout=True).to(device3)
-    # model = DVNet(elu=False, nll=False).to(device=device)
-    # model=DMFNet(c=1, num_classes=2).to(device)
-    # model = DUnet().to(device)
-    n_labels = 2  # 33
-    # model = Unet(num_classes=n_labels).to(device)
-    cen_checkpoint = torch.load("output/cen_off_VNet_cui_2022-05-18_15:13:30_epoch_199.pth", map_location='cpu')
+    cen_checkpoint = torch.load("output/cen_off_VNet_res_2022-05-20_10:12:00_epoch_399.pth", map_location='cpu')
     ske_checkpoint = torch.load("output/ske_off_VNet_cui_2022-05-16_00:35:36_epoch_799.pth", map_location='cpu')
     ins_checkpoint = torch.load("output/ins_VNet_singleTooth_2022-05-16_13:38:05_epoch_699.pth", map_location='cpu')
     cen_net.load_state_dict(cen_checkpoint)
     ske_net.load_state_dict(ske_checkpoint)
     ins_net.load_state_dict(ins_checkpoint)
     for_mine_ins(cen_net, ske_net, ins_net, device1, device2, device3)
-
-# img = nib.load('output/test/img_tooth_023.nii.gz').get_data()
-# seg=nib.load('data/labelsTr/tooth_023.nii.gz').get_data()
-# img = torch.unsqueeze(torch.from_numpy(img).type(torch.FloatTensor), dim=0)
-# img = torch.unsqueeze(img, dim=0)
-# # for num, img in enumerate(testloader):
-#
-# print(img.shape)
-#
-# with torch.no_grad():
-#     preds = model(img.to(device))
-#
-# r, c = preds.shape
-# print(r, c)
-# seg = np.zeros((r, 1))  # (256*256*256,1))
-# for i in range(r):
-#     if preds[i, 0] > preds[i, 1]:
-#         seg[i, 0] = 0
-#     else:
-#         seg[i, 0] = 1
-#
-# seg = seg.reshape((192, 192, 192))
-#
-# out = nib.Nifti1Image(seg, affine=np.eye(4))
-# nib.save(out, os.path.join(result_save_path, "result-tooth_023.nii.gz"))
+    # n_labels = 33
+    # device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+    # model = AttentionUNet(in_channel=1, num_class=n_labels).to(device)
+    # attn_checkpoint = torch.load("output/AttentionUNet_2022-05-21_12:58:15_epoch_399.pth", map_location='cpu')
+    # model.load_state_dict(attn_checkpoint)
+    # for_mine_attn(model, device, n_labels)

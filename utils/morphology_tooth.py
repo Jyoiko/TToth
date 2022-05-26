@@ -58,7 +58,7 @@ def cen_cluster(seg, off):
     weight_dis = np.amin(coord_dis, axis=1)
     weight_score = voting_map[index_pts]
 
-    centroids = coord[:, (weight_dis > 5) * (weight_score > 100)]
+    centroids = coord[:, (weight_dis > 10) * (weight_score > 20)]
 
     # cnt_test = np.zeros(voting_map.shape)
     # cnt_test[centroids[0, :], centroids[1, :], centroids[2, :]] = 1
@@ -101,7 +101,7 @@ def map_cntToskl(centroids, seg, skl_off, cen_off):
     return ins_skl_map
 
 
-def centroid_density(cen_map):  # 首先找到centroid，然后对每个体素，根据其偏移进行预测
+def centroid_density(seg, cen_map):  # 首先找到centroid，然后对每个体素，根据其偏移进行预测
     """
     仅测试时使用，因为无训练参数
     cen_map: (3,256,256,256)
@@ -111,17 +111,25 @@ def centroid_density(cen_map):  # 首先找到centroid，然后对每个体素�
     # cen_map=cen_map.numpy().astype(int)#此时cen_map还是float,不知道有没有必要转到cpu计算
     density_threshold = 20
     distance2_threshold = 100
-    w, h, l = np.where(cen_map[0] != 0)
+    seg[seg > 0.5] = 1
+    seg[seg <= 0.5] = 0
+    coord = np.array(np.nonzero((seg == 1)))
+    _off = cen_map[:, seg == 1]
+    coord = coord + _off
+    coord = coord.astype(np.int)
+    coord, coord_count = np.unique(coord, return_counts=True, axis=1)
+    res = np.zeros(seg.shape)
+    np.clip(coord[0], 0, seg.shape[0] - 1, out=coord[0])
+    np.clip(coord[1], 0, seg.shape[1] - 1, out=coord[1])
+    np.clip(coord[2], 0, seg.shape[2] - 1, out=coord[2])
+    res[coord[0], coord[1], coord[2]] = coord_count
+    # w = coord.shape[1]
     # 这里可以增加cen_map不同维度的判断
-    mapx_size, mapy_size, mapz_size = cen_map[0].shape
+    # mapx_size, mapy_size, mapz_size = cen_map[0].shape
     # cen_map=np.asarray(cen_map,dtype=np.int32)
-    cenx = cen_map[0]  # .squeeze(0)
-    ceny = cen_map[1]
-    cenz = cen_map[2]
-    res = np.zeros(cen_map[0].shape)
-    result = np.zeros(cen_map[0].shape)
-    for i in range(w.size):
-        res[cenx[w[i], h[i], l[i]], ceny[w[i], h[i], l[i]], cenz[w[i], h[i], l[i]]] += 1
+
+    # res = np.zeros(seg.shape)
+    result = np.zeros(seg.shape)
 
     res_posx, res_posy, res_posz = np.where(res != 0)  # 后面的小坐标可以映射过来
     res = res.ravel()
@@ -129,7 +137,7 @@ def centroid_density(cen_map):  # 首先找到centroid，然后对每个体素�
     res_nonzero = res[np.nonzero(res)]
     sort_rho_idx = np.argsort(-res_nonzero)
     delta, nneigh = [sys.maxsize] * (res_nonzero.size), [0] * res_nonzero.size
-    # print("Phase 1 ..")
+    print("Phase 1 ..")
     for i in range(1, res_nonzero.size):
         for j in range(0, i):  # 只比较比i密度大的点
             old_i, old_j = sort_rho_idx[i], sort_rho_idx[j]  # old_i,old_j表示在原数组中的坐标
@@ -139,11 +147,11 @@ def centroid_density(cen_map):  # 首先找到centroid，然后对每个体素�
                 delta[old_i] = distance
                 nneigh[old_i] = old_j
     delta[sort_rho_idx[0]] = max(delta)
-    # print("Phase 2 ..")
+    print("Phase 2 ..")
     for idx, (ldensity, mdistance, nneigh_item) in enumerate(zip(res_nonzero, delta, nneigh)):
         if ldensity >= density_threshold and mdistance >= distance2_threshold:  # 成为聚类中心的条件
             result[res_posx[idx], res_posy[idx], res_posz[idx]] = 1
-    # print("Phase 3 ..")
+    print("Phase 3 ..")
     return result
 
 
@@ -194,6 +202,17 @@ def resize_to256(img_arr=None):
     return np.array(res)
 
 
+def resize_to192(img_arr=None):
+    resized_ct = []
+    res = []
+    for i in range(img_arr.shape[1]):
+        resized_ct.append(cv2.resize(img_arr[:, i], (192, 192), interpolation=cv2.INTER_NEAREST))
+    resized_ct = np.array(resized_ct)
+    for i in range(192):
+        res.append(cv2.resize(resized_ct[:, i], (192, 192), interpolation=cv2.INTER_NEAREST))
+    return np.array(res)
+
+
 def get_centroid_off(seg=None):
     seg = seg.astype(int)
     centroidmap_x = np.zeros(seg.shape, dtype=int)
@@ -210,9 +229,9 @@ def get_centroid_off(seg=None):
         if (centroid_x == np.zeros(centroid_x.shape)).all():
             continue
         meanx, meany, meanz = np.sum(x) // x.size, np.sum(y) // y.size, np.sum(z) // z.size
-        centroid_x[centroid_x != 0] = meanx - x
-        centroid_y[centroid_y != 0] = meany - y
-        centroid_z[centroid_z != 0] = meanz - z
+        centroid_x[centroid_x != 0] = meanx
+        centroid_y[centroid_y != 0] = meany
+        centroid_z[centroid_z != 0] = meanz
         centroidmap_x += centroid_x
         centroidmap_y += centroid_y
         centroidmap_z += centroid_z

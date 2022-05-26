@@ -287,5 +287,5 @@ class VNet_cui(nn.Module):
     def forward(self, input):
         features = self.encoder(input)
         out_seg = self.decoder_seg(features)
-        out_off = self.decoder_off(features)
-        return out_seg, out_off
+        # out_off = self.decoder_off(features)
+        return out_seg#, out_off

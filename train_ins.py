@@ -7,7 +7,7 @@ import torch.backends.cudnn as cudnn
 from torch.utils.data.dataloader import DataLoader
 from datasets.dataset_patch_train import Train_Dataset
 from models.vnet_ins_seg import VNet_singleTooth
-from utils.utils import dice_coeff_all
+from utils.utils import dice_coeff_all, dice_coeff
 from utils import common
 from evaluate import for_mine_patches
 import sys
@@ -80,7 +80,7 @@ if __name__ == '__main__':
                 "Epoch :{} ,Step :{}, LR: {} ,loss :{:.3f} ,dice:{}".format(
                     epoch, step, lr,
                     loss_value.item(),
-                    dice_coeff_all(
+                    dice_coeff(
                         pred_img,
                         seg.cpu()).numpy()))
         # print('=' * 12 + "Test" + '=' * 12)

@@ -2,7 +2,7 @@ import os
 import numpy as np
 import SimpleITK as sitk
 from utils.utils import crop
-from utils.morphology_tooth import get_centroid_off, resize_to256, process_outlier, get_skeleton_off
+from utils.morphology_tooth import get_centroid_off, resize_to256, process_outlier, get_skeleton_off, get_centroid
 from skimage.morphology import skeletonize_3d, dilation
 
 
@@ -85,6 +85,7 @@ def process_second(vol_path, seg_path):
         path = os.path.join(ske_path, seg_path[index][-16:])
         sitk.WriteImage(ske_ct, path)
 
+
 def process_test(vol_path, seg_path):
     ske_path = os.path.join(datapath, "skeleton_8nTs")
     for index in range(len(seg_path)):
@@ -115,6 +116,35 @@ def process_test(vol_path, seg_path):
         path = os.path.join(ske_path, seg_path[index][-16:])
         sitk.WriteImage(ske_ct, path)
 
+
+def process_centroid(vol_path,seg_path):
+    for index in range(len(seg_path)):
+        print(seg_path[index][-16:], "...")
+        ct = sitk.ReadImage(vol_path[index])
+        seg = sitk.ReadImage(seg_path[index], sitk.sitkUInt8)
+        ct, seg = crop(ct, seg)
+        ct_array = sitk.GetArrayFromImage(ct)
+        seg_array = sitk.GetArrayFromImage(seg)
+        seg_array = resize_to256(seg_array)
+        seg = sitk.GetImageFromArray(seg_array)
+        sitk.WriteImage(seg, seg_path[index])
+        centroidmap_x, centroidmap_y, centroidmap_z = get_centroid_off(seg_array)
+        centroidmap = get_centroid(seg_array)
+        centroidmap = dilation(centroidmap, np.ones((3, 3, 3)))
+        print("Centroid Complete")
+        cenoff_path = os.path.join(datapath, "centroid_256Ts", vol_path[index][-16:-7])
+        if not os.path.exists(cenoff_path):
+            os.mkdir(cenoff_path)
+        centroidmap_x = sitk.GetImageFromArray(centroidmap_x)
+        sitk.WriteImage(centroidmap_x, os.path.join(cenoff_path, "centroid_x.nii.gz"))
+        centroidmap_y = sitk.GetImageFromArray(centroidmap_y)
+        sitk.WriteImage(centroidmap_y, os.path.join(cenoff_path, "centroid_y.nii.gz"))
+        centroidmap_z = sitk.GetImageFromArray(centroidmap_z)
+        sitk.WriteImage(centroidmap_z, os.path.join(cenoff_path, "centroid_z.nii.gz"))
+        centroidmap = sitk.GetImageFromArray(centroidmap)
+        sitk.WriteImage(centroidmap, os.path.join(cenoff_path, "centroid.nii.gz"))
+
+
 if __name__ == '__main__':
 
     """
@@ -135,4 +165,4 @@ if __name__ == '__main__':
     for item in seg_temp_path:
         seg_path.append(os.path.join(datapath, "labelsTs", item))
 
-    process_test(vol_path, seg_path)
+    process_centroid(vol_path,seg_path)
