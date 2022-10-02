@@ -181,8 +181,12 @@ class VNet_res(nn.Module):
     def __init__(self, n_channels=3, n_classes=2, n_filters=16, normalization='none', has_dropout=False):
         super(VNet_res, self).__init__()
         self.has_dropout = has_dropout
-
-        self.block_one = ConvBlock(1, n_channels, 8, normalization=normalization)
+        self.fcn = nn.Sequential(
+            ConvBlock(2, n_channels, 32),
+            nn.Conv3d(32, 64, kernel_size=2, stride=2, padding=0),
+            nn.BatchNorm3d(64)
+        )
+        self.block_one = ConvBlock(1, 64, 8, normalization=normalization)
         self.block_one_dw = DownsamplingConvBlock(8, n_filters, normalization=normalization)
 
         self.block_two = ConvBlock(2, n_filters, n_filters * 2, normalization=normalization)
@@ -208,12 +212,13 @@ class VNet_res(nn.Module):
 
         self.out_conv_seg = nn.Conv3d(8, n_classes, 1, padding=0)
         self.out_conv_off = nn.Conv3d(8, 3, 1, padding=0)
-        self.sigmoid = nn.Sigmoid()
-
+        # self.sigmoid = nn.Sigmoid()
+        self.softmax = F.softmax
         self.dropout = nn.Dropout3d(p=0.5, inplace=False)
         # self.__init_weight()
 
     def encoder(self, input):
+        input = self.fcn(input)
         x1 = self.block_one(input)
         x1_dw = self.block_one_dw(x1)
 
@@ -257,35 +262,35 @@ class VNet_res(nn.Module):
         x8_up = self.block_eight_up(x8)
 
         out_seg = self.out_conv_seg(x8_up)
-
+        out_seg = self.softmax(out_seg, dim=1)
         return out_seg
 
-    def decoder_off(self, features):
-        x2 = features[0]
-        x3 = features[1]
-        x4 = features[2]
-        x5 = features[3]
-        # x5 = features[4]
-
-        x5_up = self.block_five_up(x5)
-        x5_up = x5_up + x4
-
-        x6 = self.block_six(x5_up)
-        x6_up = self.block_six_up(x6)
-        x6_up = x6_up + x3
-
-        x7 = self.block_seven(x6_up)
-        x7_up = self.block_seven_up(x7)
-        x7_up = x7_up + x2
-
-        x8 = self.block_eight(x7_up)
-        x8_up = self.block_eight_up(x8)
-
-        out_off = self.out_conv_off(x8_up)
-        return out_off
+    # def decoder_off(self, features):
+    #     x2 = features[0]
+    #     x3 = features[1]
+    #     x4 = features[2]
+    #     x5 = features[3]
+    #     # x5 = features[4]
+    #
+    #     x5_up = self.block_five_up(x5)
+    #     x5_up = x5_up + x4
+    #
+    #     x6 = self.block_six(x5_up)
+    #     x6_up = self.block_six_up(x6)
+    #     x6_up = x6_up + x3
+    #
+    #     x7 = self.block_seven(x6_up)
+    #     x7_up = self.block_seven_up(x7)
+    #     x7_up = x7_up + x2
+    #
+    #     x8 = self.block_eight(x7_up)
+    #     x8_up = self.block_eight_up(x8)
+    #
+    #     out_off = self.out_conv_off(x8_up)
+    #     return out_off
 
     def forward(self, input):
         features = self.encoder(input)
         out_seg = self.decoder_seg(features)
-        out_off = self.decoder_off(features)
-        return out_seg, out_off
+        # out_off = self.decoder_off(features)
+        return out_seg#, out_off

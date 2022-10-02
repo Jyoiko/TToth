@@ -218,9 +218,8 @@ class VNet_singleTooth(nn.Module):
         out_seg = self.out_conv_seg(x8_up)
         return out_seg
 
-    def forward(self, ori, skl):
+    def forward(self, ori):
         ori = torch.reshape(ori, (ori.shape[0] * ori.shape[1], 1, ori.shape[2], ori.shape[3], ori.shape[4]))
-        skl = torch.reshape(skl, (skl.shape[0] * skl.shape[1], 1, skl.shape[2], skl.shape[3], skl.shape[4]))
-        features = self.encoder(torch.cat((ori, skl), 1))
+        features = self.encoder(ori)
         seg = self.decoder(features)
         return seg

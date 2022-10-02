@@ -9,14 +9,14 @@ import torch.backends.cudnn as cudnn
 from torch.utils.data.dataloader import DataLoader
 from datasets.dataset_cen_train import Attn_Dataset
 # from models.unetr import UNETR
-from models.unetr_official import UNETR
+from models.unetr_official import UNETR_Official
 from models.TransUnet import TransUnet
 from models.attention_unet import AttentionUNet
 from utils.utils import dice_coeff
 from utils import common
 from evaluate import centroid_mine, for_mine_attn
 import sys
-from utils.logger import New_Print_Logger
+from utils.logger import New_Print_Logger, Print_Logger
 import torch.nn.functional as F
 from apex import amp
 from utils.loss import DiceLoss, dice_loss
@@ -50,7 +50,7 @@ if __name__ == '__main__':
         'decoder_channels': [(256, 256, 256), (256, 128, 128), (128, 64, 64)]
     }
     # model = UNETR().to(device)
-    model = UNETR(in_channels=1, out_channels=2, img_size=(128, 128, 128), pos_embed='conv', dropout_rate=0.2).to(
+    model = UNETR_Official(in_channels=1, out_channels=2, img_size=(128, 128, 128), pos_embed='conv', dropout_rate=0.2).to(
         device)
     # model = AttentionUNet(in_channel=1, num_class=n_labels).to(device)
 
@@ -60,15 +60,14 @@ if __name__ == '__main__':
 
     model_name = str(model)
     model_name = model_name[:model_name.index('(')]
-    sys.stdout = New_Print_Logger(filename=f'{model_name}-{type_time}-log.log')
-    criterion1 = nn.CrossEntropyLoss().to(device)
-    criterion2 = DiceLoss(n_classes=n_labels).to(device)
+    sys.stdout = Print_Logger(filename=f'{model_name}-{type_time}-log.log')
+
     criterion3 = nn.L1Loss().to(device)
-    optim = optim.Adam(model.parameters(), lr=lr)
+    optim = optim.AdamW(model.parameters(), lr=lr)
     # model, optim = amp.initialize(model, optim, opt_level="O1")
 
     print("=" * 20)
-    trainset = Attn_Dataset()
+    trainset = Attn_Dataset(datapath="data")
     train_loader = DataLoader(trainset, batch_size=1, num_workers=4, shuffle=False)
 
     print("Start Training...")
@@ -104,10 +103,10 @@ if __name__ == '__main__':
 
         print('=' * 12 + "Test" + '=' * 12)
         if (epoch + 1) % 100 == 0:
-            for_mine_attn(model, device, n_labels, all_test=True, datapath="../data")
+            for_mine_attn(model, device, n_labels, all_test=True, datapath="data")
             torch.save(model.state_dict(),
-                       os.path.join('../output',
+                       os.path.join('output',
                                     '{}_{}_epoch_{}.pth'.format(model_name, type_time, epoch)))  # 打印模型名称
         else:
-            for_mine_attn(model, device, n_labels, datapath="../data")
+            for_mine_attn(model, device, n_labels, datapath="data")
         print('=' * 26)

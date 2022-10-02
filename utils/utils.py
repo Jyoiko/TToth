@@ -1,9 +1,17 @@
 import SimpleITK as sitk
 import numpy as np
+import torch
 from skimage.morphology import skeletonize_3d
 from scipy import ndimage
 from skimage import morphology
 from scipy.ndimage import gaussian_filter
+
+
+def precision(pred, target):
+    pred = torch.argmax(pred, dim=1)
+    num = target.size(0) * target.size(-1)
+    acc = (pred == target).sum()
+    return acc / num
 
 
 def dice_coeff(pred, target):
@@ -20,18 +28,54 @@ def dice_coeff(pred, target):
     return res
 
 
+# for patches cut
 def dice_coeff_all(pred, target):
-    smooth = 1.
-    num = pred.size()  # 1)
+    smooth = 1e-5
+    num = pred.size(0)  # 1)
     # print(num)
     m1 = pred.view(num, -1)  # Flatten
     m2 = target.view(num, -1)  # Flatten
     intersection = (m1 * m2)
-    sum_intersection=intersection.sum()
-    sum1=m1.sum()
-    sum2=m2.sum()
+    sum_intersection = intersection.sum(1)
+    sum1 = m1.sum(1)
+    sum2 = m2.sum(1)
     res = (2. * sum_intersection + smooth) / (sum1 + sum2 + smooth)
     return res
+
+
+def img_crop(image, seg):
+    image_bbox = seg.copy()
+    image_bbox = morphology.remove_small_objects(image_bbox.astype(bool), 2500, connectivity=3).astype(int)
+    if image_bbox.sum() > 0:
+        # if None:
+        x_min = np.nonzero(image_bbox)[0].min() - 1
+        x_max = np.nonzero(image_bbox)[0].max() + 1
+
+        y_min = np.nonzero(image_bbox)[1].min() - 1
+        y_max = np.nonzero(image_bbox)[1].max() + 1
+
+        z_min = np.nonzero(image_bbox)[2].min() - 1
+        z_max = np.nonzero(image_bbox)[2].max() + 1
+
+        if x_min < 0:
+            x_min = 0
+        if y_min < 0:
+            y_min = 0
+        if z_min < 0:
+            z_min = 0
+        if x_max > image_bbox.shape[0]:
+            x_max = image_bbox.shape[0]
+        if y_max > image_bbox.shape[1]:
+            y_max = image_bbox.shape[1]
+        if z_max > image_bbox.shape[2]:
+            z_max = image_bbox.shape[2]
+    if image_bbox.sum() == 0:
+        x_min, x_max, y_min, y_max, z_min, z_max = -1, image_bbox.shape[0], 0, image_bbox.shape[1], 0, image_bbox.shape[
+            2]
+    image = image[x_min:x_max, y_min:y_max, z_min:z_max]
+    seg = seg[x_min:x_max, y_min:y_max, z_min:z_max]
+    return image, seg
+
 
 def crop(img, seg):
     ct_array = sitk.GetArrayFromImage(img)
@@ -96,8 +140,49 @@ def get_patch(multi_skeleton=None, img_arr=None, seg=None):
         image_list.append(img_patch)
         skeleton_list.append(crop_skeleton)
     # third-patch: 训练时分割seg， 测试时保存每个patch的坐标信息
-    third_patches=np.asarray(third_list)
+    third_patches = np.asarray(third_list)
     image_patches = np.asarray(image_list)
     skeleton_patches = np.asarray(skeleton_list)
 
-    return image_patches,skeleton_patches,third_patches
+    return image_patches, skeleton_patches, third_patches
+
+
+def get_cen_patch(img_arr=None, seg=None, centroid=None):
+    """
+
+    :param img_arr:
+    :param seg: binary
+    :param centroid: 这里的centroid是有label标签的，其实对应之前方法的skeleton
+    :return:
+    """
+    crop_size = np.array([64, 64, 64])
+    image_list = []
+    second_list = []
+    if centroid.shape[0] == 3:
+        centroid = centroid.T
+    for i in range(centroid.shape[0]):
+
+        coord = centroid[i]
+        crop_coord_min = coord - crop_size / 2
+        np.clip(crop_coord_min, (0, 0, 0), img_arr.shape - crop_size, out=crop_coord_min)
+        crop_coord_min = crop_coord_min.astype(int)
+
+        img_patch = img_arr[crop_coord_min[0]:(crop_coord_min[0] + crop_size[0]),
+                    crop_coord_min[1]:(crop_coord_min[1] + crop_size[1]),
+                    crop_coord_min[2]:(crop_coord_min[2] + crop_size[2])]
+        if seg is not None:
+            seg_array = np.zeros(seg.shape)
+            seg_array[seg == i + 1] = 1
+            seg_patch = seg_array[crop_coord_min[0]:(crop_coord_min[0] + crop_size[0]),
+                        crop_coord_min[1]:(crop_coord_min[1] + crop_size[1]),
+                        crop_coord_min[2]:(crop_coord_min[2] + crop_size[2])]
+            second_list.append(seg_patch)
+        else:
+            second_list.append(crop_coord_min)
+        image_list.append(img_patch)
+
+    # second_patches: 训练时分割seg， 测试时保存每个patch的坐标信息
+    second_patches = np.asarray(second_list)
+    image_patches = np.asarray(image_list)
+
+    return image_patches, second_patches
